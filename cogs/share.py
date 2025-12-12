@@ -19,14 +19,6 @@ class ShareModal(discord.ui.Modal, title='分享資訊'):
         self.category = category
         self.sheets_handler = sheets_handler
 
-    # 我是誰（必填）
-    who = discord.ui.TextInput(
-        label='我是誰',
-        placeholder='請輸入你的名字或暱稱',
-        required=True,
-        max_length=50
-    )
-
     # 主題（選填）
     topic = discord.ui.TextInput(
         label='主題',
@@ -59,6 +51,15 @@ class ShareModal(discord.ui.Modal, title='分享資訊'):
         max_length=50
     )
 
+    # 補充（選填）
+    note = discord.ui.TextInput(
+        label='補充',
+        placeholder='其他補充說明（選填）',
+        required=False,
+        style=discord.TextStyle.paragraph,
+        max_length=1000
+    )
+
     async def on_submit(self, interaction: discord.Interaction):
         """當使用者提交表單時的處理"""
         try:
@@ -72,15 +73,9 @@ class ShareModal(discord.ui.Modal, title='分享資訊'):
                 r'(?::\d+)?'  # 可選端口
                 r'(?:/?|[/?]\S+)$', re.IGNORECASE)
 
-            # 如果不是有效網址，嘗試取得當前訊息連結
+            # 如果不是有效網址，保留原始文字
             if not url_pattern.match(source_value):
-                if interaction.message:
-                    # 建立訊息連結
-                    guild_id = interaction.guild_id
-                    channel_id = interaction.channel_id
-                    message_id = interaction.message.id
-                    source_value = f"https://discord.com/channels/{guild_id}/{channel_id}/{message_id}"
-                    source_value += f"\n原始內容：{self.source.value}"
+                source_value = str(self.source.value)
 
             # 準備要儲存的資料
             data = {
@@ -94,35 +89,67 @@ class ShareModal(discord.ui.Modal, title='分享資訊'):
                 'user_id': str(interaction.user.id)
             }
 
-            # 儲存到 Google Sheets（暫時停用）
+            # 建立 Embed 訊息
+            embed = discord.Embed(
+                title=f"📝 {data['category']} 分享",
+                color=discord.Color.blue(),
+                timestamp=discord.utils.utcnow()
+            )
+
+            # 分享者和 Aiworks 點在同一行（inline）
+            embed.add_field(
+                name="👤 分享者",
+                value=interaction.user.name,
+                inline=True
+            )
+            embed.add_field(
+                name="💎 Aiworks 點",
+                value=data['aiworks_points'],
+                inline=True
+            )
+
+            # 主題（如果有填寫）
+            if data['topic']:
+                embed.add_field(
+                    name="📌 主題",
+                    value=data['topic'],
+                    inline=False
+                )
+
+            # 總結
+            embed.add_field(
+                name="📄 總結",
+                value=data['summary'],
+                inline=False
+            )
+
+            # 來源
+            embed.add_field(
+                name="🔗 來源",
+                value=data['source'],
+                inline=False
+            )
+
+            # 補充（如果有填寫）
+            if data['note']:
+                embed.add_field(
+                    name="📝 補充",
+                    value=data['note'],
+                    inline=False
+                )
+
+            # 先回應 interaction（ephemeral）告訴使用者已提交
+            await interaction.response.send_message(
+                '✅ 分享成功！訊息已發送到頻道。',
+                ephemeral=True
+            )
+
+            # 發送公開 Embed 訊息到當前頻道
+            await interaction.channel.send(embed=embed)
+
+            # 如果有 Google Sheets，儲存資料
             if self.sheets_handler:
-                success = self.sheets_handler.append_data(data)
-                if success:
-                    await interaction.response.send_message(
-                        '✅ 儲存成功！感謝你的分享！',
-                        ephemeral=True
-                    )
-                else:
-                    await interaction.response.send_message(
-                        '❌ 儲存失敗，請稍後再試或聯絡管理員。',
-                        ephemeral=True
-                    )
-            else:
-                # Google Sheets 停用時，只顯示接收到的資料
-                summary_text = (
-                    f"✅ 已接收你的分享！\n\n"
-                    #f"**分類**：{data['category']}\n"
-                    #f"**主題**：{data['topic'] or '（未填寫）'}\n"
-                    #f"**總結**：{data['summary']}\n"
-                    #f"**來源**：{data['source']}\n"
-                    #f"**Aiworks 點**：{data['aiworks_points']}\n"
-                    #f"**補充**：{data['note'] or '（未填寫）'}\n\n"
-                    f"ℹ️ Google Sheets 功能目前停用，資料未儲存"
-                )
-                await interaction.response.send_message(
-                    summary_text,
-                    ephemeral=True
-                )
+                self.sheets_handler.append_data(data)
 
         except Exception as e:
             print(f"處理表單提交時發生錯誤: {e}")
@@ -135,7 +162,7 @@ class ShareModal(discord.ui.Modal, title='分享資訊'):
 class CategorySelect(Select):
     """分類選擇下拉選單"""
 
-    def __init__(self, sheets_handler=None):  # sheets_handler 暫時停用
+    def __init__(self, sheets_handler=None):
         self.sheets_handler = sheets_handler
 
         # 建立選項
@@ -152,10 +179,8 @@ class CategorySelect(Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        """當使用者選擇分類時的回調"""
+        """當使用者選擇分類時，直接彈出 Modal"""
         selected_category = self.values[0]
-
-        # 顯示 Modal 表單
         modal = ShareModal(category=selected_category, sheets_handler=self.sheets_handler)
         await interaction.response.send_modal(modal)
 
@@ -163,7 +188,7 @@ class CategorySelect(Select):
 class CategoryView(View):
     """包含分類選單的 View"""
 
-    def __init__(self, sheets_handler=None):  # sheets_handler 暫時停用
+    def __init__(self, sheets_handler=None):
         super().__init__(timeout=180)  # 3 分鐘後超時
         self.add_item(CategorySelect(sheets_handler))
 
@@ -191,21 +216,12 @@ class ShareCog(commands.Cog):
     async def share(self, interaction: discord.Interaction):
         """
         /infoshare 指令
-        顯示分類選擇下拉選單
+        只顯示分類選擇下拉選單（極簡版）
         """
-        # 暫時註解掉 Google Sheets 檢查（但保留 UI 功能）
-        # if not self.sheets_handler:
-        #     await interaction.response.send_message(
-        #         '❌ Google Sheets 尚未初始化，請聯絡管理員。',
-        #         ephemeral=True
-        #     )
-        #     return
-
         view = CategoryView(self.sheets_handler)
         await interaction.response.send_message(
-            '📝 請選擇要分享的資訊類別：',
             view=view,
-            ephemeral=True  # 只有使用者自己看得到
+            ephemeral=True
         )
 
 async def setup(bot: commands.Bot):
