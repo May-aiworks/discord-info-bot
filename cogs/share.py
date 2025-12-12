@@ -19,6 +19,14 @@ class ShareModal(discord.ui.Modal, title='分享資訊'):
         self.category = category
         self.sheets_handler = sheets_handler
 
+    # 我是誰（必填）
+    who = discord.ui.TextInput(
+        label='我是誰',
+        placeholder='請輸入你的名字或暱稱',
+        required=True,
+        max_length=50
+    )
+
     # 主題（選填）
     topic = discord.ui.TextInput(
         label='主題',
@@ -49,15 +57,6 @@ class ShareModal(discord.ui.Modal, title='分享資訊'):
         placeholder='請輸入 Aiworks 點數（可填「無」）',
         required=True,
         max_length=50
-    )
-
-    # 補充（選填）
-    note = discord.ui.TextInput(
-        label='補充',
-        placeholder='其他補充說明（選填）',
-        required=False,
-        style=discord.TextStyle.paragraph,
-        max_length=1000
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -112,12 +111,12 @@ class ShareModal(discord.ui.Modal, title='分享資訊'):
                 # Google Sheets 停用時，只顯示接收到的資料
                 summary_text = (
                     f"✅ 已接收你的分享！\n\n"
-                    f"**分類**：{data['category']}\n"
-                    f"**主題**：{data['topic'] or '（未填寫）'}\n"
-                    f"**總結**：{data['summary']}\n"
-                    f"**來源**：{data['source']}\n"
-                    f"**Aiworks 點**：{data['aiworks_points']}\n"
-                    f"**補充**：{data['note'] or '（未填寫）'}\n\n"
+                    #f"**分類**：{data['category']}\n"
+                    #f"**主題**：{data['topic'] or '（未填寫）'}\n"
+                    #f"**總結**：{data['summary']}\n"
+                    #f"**來源**：{data['source']}\n"
+                    #f"**Aiworks 點**：{data['aiworks_points']}\n"
+                    #f"**補充**：{data['note'] or '（未填寫）'}\n\n"
                     f"ℹ️ Google Sheets 功能目前停用，資料未儲存"
                 )
                 await interaction.response.send_message(
